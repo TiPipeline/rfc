@@ -49,7 +49,7 @@ Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-
 能够消除线程调度的 context switch 开销，提高 cpu 有效利用率。  
 ![thread_per_core](./media/thread_per_core.png)
 ## design overview
-pipeline + thread per core + async io interface  
+`TiPipeline = pipeline + thread per core + async io interface`  
 ![design_overview](./media/design_overview.png)
 ## pipeline scheduler
 pipeline model 的 scheduler 有 dag 和 task 两类。  
