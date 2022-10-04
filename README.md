@@ -74,7 +74,7 @@ task scheduler 是全局共享的，这就意味着所有 query 的 pipeline 实
 ### async table scan
 在 [TiFlash 存储层独立程池](https://github.com/pingcap/tiflash/blob/7c0472c9acef27d5b48d834fd62589b81446ced8/docs/design/2022-07-25-read-thread-pool-and-data-sharing.md) 引入后，tiflash 的存储层引擎 delte tree engine 的相关读取操作都是在独立的存储层线程池中执行，计算层线程只是在等待存储层线程池完成读取操作将数据块写入队列后，从队列里读取数据块。  
 所以这里只需要包装新的 async table scan 接口，让 table scan 不阻塞在存储层队列的 pop 上，而是用 try pop。  
-![async_table_scan](./media/async_table_scan.png)
+![async_table_scan](./media/async_table_scan.png)  
 ### async exchange
 tiflash 用于做 shuffle 的算子是 exchange sender 和 exchange receiver，这两个算子会涉及到跨 tiflash 节点的网络通信。  
 TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。计算层线程会 push/pop packet queue，如果 packet queue full/empty，计算层线程就会阻塞。  
@@ -85,8 +85,8 @@ TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。�
 因为 async io interface，TiFlash 原先的 pull model 实现 BlockInputStream 在代码逻辑上会别扭一些。  
 所以会在 BlockInputStream 的基础上重新拆解包装出代码逻辑上比较合理的 push model 实现。  
 ![push_model](./media/push_model.png)  
-- source 用于读算子，比如 async exchange receiver，async table scan，语义保证无阻塞  
-- sink 用于写算子，比如 async exchange sender，语义保证无阻塞  
+- source 用于读算子，比如 async exchange receiver，async table scan，语义保证无阻塞 
+- sink 用于写算子，比如 async exchange sender，语义保证无阻塞
 - 其余的算子都归类到 transform 里，语义保证无阻塞  
 ## 前置条件
 - enable planner
@@ -97,6 +97,3 @@ TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。�
   - 基于存储层独立线程池实现 async table scan
 - disable minTso scheduler
   - 在 thread per core 后，minTso scheduler 的作用已经不大了，可以关闭或者把限制参数调得很大。
-# 展望
-## 多租户
-pipeline model 具备公平调度不同 query 的能力。可以在公平调度的基础上
