@@ -62,7 +62,7 @@ pipeline scheduler 会将输入 tiflash 的 oprerator-dag 转换为 pipeline-dag
 首先使用 planner interpreter 将输入 TiFlash 的 DAGRequest 解释为 PhysicalPlan Tree。在 PhysicalPlan Tree 中找到 pipeline breaker，按 pipeline breaker 切分即可得到 pipeline dag。  
 dag scheduler 会按照 pipeline 的 dag 关系，逐一调度 pipeline 提交到 task scheduler 执行。  
 每个 MPPTask 都会有自己独立的 dag scheduler。  
-![dag_scheduler](./media/new_dag_scheduler.png.png)
+![dag_scheduler](./media/new_dag_scheduler.png)
 ### task scheduler
 task scheduler 是全局共享的，这就意味着所有 query 的 pipeline 实例化出来的 task 都提交到同一个 task scheduler。  
 task scheduler 内部会维护 cpu core num 大小的线程池和一个 task queue。  
