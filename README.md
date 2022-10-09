@@ -36,10 +36,10 @@ Better TiFlash execution model！
 ### what is pipeline
 Hyper 的论文阐述了，在算子执行流中，aggregate/join/sort 等等算子里存在 pipeline breaker。在 pipeline breaker 之前的执行流执行完成后，pipeline breaker 之后的执行流才能执行。比如 HashJoin 中 build hash map 的动作就是一个 pipeline breaker。
 ```
-Hyper's papers
-Efficiently Compiling Efficient Query Plans for Modern Hardware
-Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age
-...
+Hyper's papers:
+- Efficiently Compiling Efficient Query Plans for Modern Hardware
+- Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age
+- ...
 ```
 如果把整个算子执行流按 pipeline breaker 切分，就会切分出若干个 pipeline。pipeline 是理论上不存在任何阻塞、停顿的执行概念，也意味着是 cpu 密集型，能最大化利用 cpu。  
 ![hyper_pipeline_dag](./media/hyper_pipeline_dag.JPEG)
@@ -62,19 +62,19 @@ pipeline scheduler 会将输入 tiflash 的 oprerator-dag 转换为 pipeline-dag
 首先使用 planner interpreter 将输入 TiFlash 的 DAGRequest 解释为 PhysicalPlan Tree。在 PhysicalPlan Tree 中找到 pipeline breaker，按 pipeline breaker 切分即可得到 pipeline dag。  
 dag scheduler 会按照 pipeline 的 dag 关系，逐一调度 pipeline 提交到 task scheduler 执行。  
 每个 MPPTask 都会有自己独立的 dag scheduler。  
-![dag_scheduler](./media/dag_scheduler.png)
+![dag_scheduler](./media/new_dag_scheduler.png.png)
 ### task scheduler
 task scheduler 是全局共享的，这就意味着所有 query 的 pipeline 实例化出来的 task 都提交到同一个 task scheduler。  
 task scheduler 内部会维护 cpu core num 大小的线程池和一个 task queue。  
 pipeline 提交到 task scheduler 后会被实例化成若干个 pipeline task，pipeline task 的数目一般为 cpu core num。  
 线程池从 task queue 里获取 ready pipeline task 执行。pipeline task 在被执行一段时间后(上限 100 ms)，就会被放回 task queue 等待下次调度执行。  
 可以针对 task queue 做排序策略，让高优先级的 task 先执行，目前默认实现是简单的先进先出，也就等同所有的 task 是同等优先级，也意味着 query 间是公平调度。  
-pipeline task 有三种状态  
-- ready, 在 task queue 里等待调度执行, 被线程池调度执行后状态转为 running  
-- running, 在线程池中被执行  
+pipeline task 有三种状态:
+- ready，在 task queue 里等待调度执行，被线程池调度执行后状态转为 running  
+- running，在线程池中被执行  
     - 在执行完分配的时间片后状态转为 ready 放入 task queue  
 	- 发现有 io 相关阻塞事件后状态转为 blocked 传给 io reactor  
-- blocked, 由于 io 相关事件被阻塞, 在 io reactor 轮询检查状态 ok 后再转为 ready 放入 task queue.  
+- blocked，由于 io 相关事件被阻塞，在 io reactor 轮询检查状态 ok 后再转为 ready 放入 task queue.  
 
 ![task_scheduler](./media/new_task_scheduler.png)  
 ## async io interface
