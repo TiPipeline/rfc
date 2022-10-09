@@ -32,7 +32,7 @@ Better TiFlash execution model！
 本项目将演进 TiFlash 的执行模型，实现 pipeline model。
 ## what is pipeline model
 `pipeline model = pipeline + thread per core`  
-将发送给 TiFlash 的 operator-dag 解析成 pipeline-dag，并且跑在全局共享的固定大小绑核线程池上。
+将发送给 TiFlash 的 operator-dag 解析成 pipeline-dag，并且跑在全局共享的固定大小线程池上。
 ### what is pipeline
 Hyper 的论文阐述了，在算子执行流中，aggregate/join/sort 等等算子里存在 pipeline breaker。在 pipeline breaker 之前的执行流执行完成后，pipeline breaker 之后的执行流才能执行。比如 HashJoin 中 build hash map 的动作就是一个 pipeline breaker。
 ```
@@ -44,36 +44,43 @@ Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-
 如果把整个算子执行流按 pipeline breaker 切分，就会切分出若干个 pipeline。pipeline 是理论上不存在任何阻塞、停顿的执行概念，也意味着是 cpu 密集型，能最大化利用 cpu。  
 ![hyper_pipeline_dag](./media/hyper_pipeline_dag.JPEG)
 ### what is thread per core
-即固定大小的绑核线程池。  
-全局只有 cpu core num 个线程，并且和 cpu core 一一绑定的线程模型。  
+即固定大小的线程池。  
+全局只有 cpu core num 个线程，与 cpu core 一一对应的线程模型。  
 能够消除线程调度的 context switch 开销，提高 cpu 有效利用率。  
 ![thread_per_core](./media/thread_per_core.png)
 ## design overview
 `TiPipeline = pipeline + thread per core + async io interface`  
-![design_overview](./media/design_overview.png)
+![design_overview](./media/new_design_overview.png)
 ## pipeline scheduler
 pipeline model 的 scheduler 有 dag 和 task 两类。  
 pipeline scheduler 会将输入 tiflash 的 oprerator-dag 转换为 pipeline-dag，并按 dag 关系逐一调度 pipeline 执行。  
-每个 pipeline 会被实例化成若干个 pipeline-task，pipeline-task 会被扔到固定大小的绑核线程池上执行。  
+每个 pipeline 会被实例化成若干个 pipeline-task，pipeline-task 会被扔到固定大小的线程池上执行。  
 原则上单个 pipeline 实例化的 task 的数目与线程池大小一致。  
 ![morsel_driven](./media/morsel_driven.JPEG)
 ### dag scheduler
-在 TiFlash 的 [planner refactor](https://github.com/pingcap/tiflash/blob/7c0472c9acef27d5b48d834fd62589b81446ced8/docs/design/2022-04-24-planner-refactor.md) 完成以后，TiFlash 就具备了构造 pipeline dag 的能力。  
+在 v6.3 [planner refactor](https://github.com/pingcap/tiflash/blob/7c0472c9acef27d5b48d834fd62589b81446ced8/docs/design/2022-04-24-planner-refactor.md) 完成以后，TiFlash 就具备了构造 pipeline dag 的能力。  
 首先使用 planner interpreter 将输入 TiFlash 的 DAGRequest 解释为 PhysicalPlan Tree。在 PhysicalPlan Tree 中找到 pipeline breaker，按 pipeline breaker 切分即可得到 pipeline dag。  
 dag scheduler 会按照 pipeline 的 dag 关系，逐一调度 pipeline 提交到 task scheduler 执行。  
+每个 MPPTask 都会有自己独立的 dag scheduler。  
 ![dag_scheduler](./media/dag_scheduler.png)
 ### task scheduler
-pipeline 提交到 task scheduler 后会被实例化成若干个 pipeline task。  
-task scheduler 内部会维护 cpu core num 个线程，每个线程会持有一个 task queue，线程会一直从 task queue 里获取 task，调用 task 执行一个 Block 后，就会被放回 task queue 等待下次调度执行。  
-并且每个线程都会与某个 cpu core 绑定，减少不必要的 context switch。  
-新提交的 pipeline 实例化的 tasks 会被均匀分配到不同的线程中。  
-![task_scheduler](./media/task_scheduler.png)  
-task scheduler 是全局共享的，这就意味着所有 query 的 pipeline 实例化出来的 task 都会跑在同一个线程池上。  
-每个 task 执行一个 block 后就会被放到 task queue 里等待下次执行，这就保证了多个 task 之间的公平执行，也就保证了多个 query 之间的公平执行。  
+task scheduler 是全局共享的，这就意味着所有 query 的 pipeline 实例化出来的 task 都提交到同一个 task scheduler。  
+task scheduler 内部会维护 cpu core num 大小的线程池和一个 task queue。  
+pipeline 提交到 task scheduler 后会被实例化成若干个 pipeline task，pipeline task 的数目一般为 cpu core num。  
+线程池从 task queue 里获取 ready pipeline task 执行。pipeline task 在被执行一段时间后(上限 100 ms)，就会被放回 task queue 等待下次调度执行。  
+可以针对 task queue 做排序策略，让高优先级的 task 先执行，目前默认实现是简单的先进先出，也就等同所有的 task 是同等优先级，也意味着 query 间是公平调度。  
+pipeline task 有三种状态  
+- ready, 在 task queue 里等待调度执行, 被线程池调度执行后状态转为 running  
+- running, 在线程池中被执行  
+    - 在执行完分配的时间片后状态转为 ready 放入 task queue  
+	- 发现有 io 相关阻塞事件后状态转为 blocked 传给 io reactor  
+- blocked, 由于 io 相关事件被阻塞, 在 io reactor 轮询检查状态 ok 后再转为 ready 放入 task queue.  
+
+![task_scheduler](./media/new_task_scheduler.png)  
 ## async io interface
 有 table scan，shuffle 算子的 pipeline 会涉及到 io 相关操作，就意味着 pipeline 会引入阻塞逻辑，这个与 pipeline model 是相违背的，所以需要包装 io 相关的操作，提供 async io interface。
 ### async table scan
-在 [TiFlash 存储层独立程池](https://github.com/pingcap/tiflash/blob/7c0472c9acef27d5b48d834fd62589b81446ced8/docs/design/2022-07-25-read-thread-pool-and-data-sharing.md) 引入后，tiflash 的存储层引擎 delte tree engine 的相关读取操作都是在独立的存储层线程池中执行，计算层线程只是在等待存储层线程池完成读取操作将数据块写入队列后，从队列里读取数据块。  
+在 v6.3 [TiFlash 存储层独立程池](https://github.com/pingcap/tiflash/blob/7c0472c9acef27d5b48d834fd62589b81446ced8/docs/design/2022-07-25-read-thread-pool-and-data-sharing.md) 引入后，tiflash 的存储层引擎 delte tree engine 的相关读取操作都是在独立的存储层线程池中执行，计算层线程只是在等待存储层线程池完成读取操作将数据块写入队列后，从队列里读取数据块。  
 所以这里只需要包装新的 async table scan 接口，让 table scan 不阻塞在存储层队列的 pop 上，而是用 try pop。  
 ![async_table_scan](./media/async_table_scan.png)  
 ### async exchange
@@ -86,15 +93,6 @@ TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。�
 因为 async io interface，TiFlash 原先的 pull model 实现 BlockInputStream 在代码逻辑上会别扭一些。  
 所以会在 BlockInputStream 的基础上重新拆解包装出代码逻辑上比较合理的 push model 实现。  
 ![push_model](./media/push_model.png)  
-- source 用于读算子，比如 async exchange receiver，async table scan，语义保证无阻塞 
-- sink 用于写算子，比如 async exchange sender，语义保证无阻塞
+- source 用于读算子，比如 async exchange receiver，async table scan，语义保证无阻塞  
+- sink 用于写算子，比如 async exchange sender，语义保证无阻塞  
 - 其余的算子都归类到 transform 里，语义保证无阻塞  
-## 前置条件
-- enable planner
-  - 在 planner Interpreter 的基础上才能构造出 pipeline dag
-- enable async grpc
-  - 减少网络层的线程数，线程数越少，越能体现 thread per core 的效果
-- enable storage read thread pool
-  - 基于存储层独立线程池实现 async table scan
-- disable minTso scheduler
-  - 在 thread per core 后，minTso scheduler 的作用已经不大了，可以关闭或者把限制参数调得很大。
