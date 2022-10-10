@@ -96,3 +96,13 @@ TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。�
 - source 用于读算子，比如 async exchange receiver，async table scan，语义保证无阻塞  
 - sink 用于写算子，比如 async exchange sender，语义保证无阻塞  
 - 其余的算子都归类到 transform 里，语义保证无阻塞  
+# 展望
+pipeline model 让我们拥有了调度的权利，能够设置各种精细的调度策略。
+我们可以在这个基础上提升 TiFlash 在 htap 场景下的易用性:
+- 资源组隔离
+    - 让轻量级查询有充足的 cpu 快速执行
+	- 偏重量型查询在不影响轻量级查询的基础上平稳执行
+	- 并非硬性隔离，资源组可以弹性利用所有 cpu 资源.
+- 多租户
+	- 不同租户共用同一个大集群，基于租户权重共享 cpu
+	- 每个租户都可以弹性利用集群所有 cpu，在其他租户查询过来时，能及时让出对应的 cpu 份额
