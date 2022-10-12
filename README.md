@@ -4,7 +4,7 @@
 # 项目介绍
 TiPipeline  
 Better TiFlash execution model！  
-抛弃 TiFlash 计算层原有的简单粗暴线程模型，基于 hyper morsel driven 的设计，完成新的 TiFlash 计算层执行模型 pipeline model，让 TiFlash 在高并发场景下有很好的执行效率和 query 公平调度。
+抛弃 TiFlash 计算层原有的简单粗暴线程模型，基于 Hyper morsel driven 的设计，完成新的 TiFlash 计算层执行模型 pipeline model，让 TiFlash 在高并发场景下有很好的执行效率和 query 公平调度。
 - 基于 pipeline breaker 的理论，将执行流拆分为计算密集型的若干 pipeline，最大化利用 cpu。
 - 使用 thread per core 线程模型，消除 context switch 的开销，以及在此基础上做 query 的公平调度执行。  
 
@@ -36,13 +36,12 @@ TiFlash 5.x 在高并发场景下
 `pipeline model = pipeline + thread per core`  
 将发送给 TiFlash 的 operator-dag 解析成 pipeline-dag，并且跑在全局共享的固定大小线程池上。
 ### what is pipeline
-Hyper 的论文阐述了，在算子执行流中，aggregate/join/sort 等等算子里存在 pipeline breaker。在 pipeline breaker 之前的执行流执行完成后，pipeline breaker 之后的执行流才能执行。比如 HashJoin 中 build hash map 的动作就是一个 pipeline breaker。
-```
+Hyper 的论文阐述了，在算子执行流中，aggregate/join/sort 等等算子里存在 pipeline breaker。在 pipeline breaker 之前的执行流执行完成后，pipeline breaker 之后的执行流才能执行。比如 HashJoin 中 build hash map 的动作就是一个 pipeline breaker。  
 Hyper's papers:
 - Efficiently Compiling Efficient Query Plans for Modern Hardware
 - Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age
 - ...
-```
+
 如果把整个算子执行流按 pipeline breaker 切分，就会切分出若干个 pipeline。pipeline 是理论上不存在任何阻塞、停顿的执行概念，也意味着是 cpu 密集型，能最大化利用 cpu。  
 ![hyper_pipeline_dag](./media/hyper_pipeline_dag.JPEG)
 ### what is thread per core
@@ -100,7 +99,7 @@ TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。�
 - 其余的算子都归类到 transform 里，语义保证无阻塞  
 # 展望
 pipeline model 让我们拥有了调度的权利，能够设置各种精细的调度策略。
-我们可以在这个基础上提升 TiFlash 在 htap 场景下的易用性:
+我们可以在这个基础上提升 TiFlash 在 HTAP 场景下的易用性:
 - 资源组隔离
     - 让轻量级查询有充足的 cpu 快速执行
 	- 偏重量型查询在不影响轻量级查询的基础上平稳执行
