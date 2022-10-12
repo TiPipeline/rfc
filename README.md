@@ -38,8 +38,8 @@ TiFlash 5.x 在高并发场景下
 ### what is pipeline
 Hyper 的论文阐述了，在算子执行流中，aggregate/join/sort 等等算子里存在 pipeline breaker。在 pipeline breaker 之前的执行流执行完成后，pipeline breaker 之后的执行流才能执行。比如 HashJoin 中 build hash map 的动作就是一个 pipeline breaker。  
 Hyper's papers:
-- Efficiently Compiling Efficient Query Plans for Modern Hardware
-- Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age
+- [Efficiently Compiling Efficient Query Plans for Modern Hardware](https://www.vldb.org/pvldb/vol4/p539-neumann.pdf)
+- [Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age](https://15721.courses.cs.cmu.edu/spring2016/papers/p743-leis.pdf)
 - ...
 
 如果把整个算子执行流按 pipeline breaker 切分，就会切分出若干个 pipeline。pipeline 是理论上不存在任何阻塞、停顿的执行概念，也意味着是 cpu 密集型，能最大化利用 cpu。  
@@ -102,8 +102,8 @@ pipeline model 让我们拥有了调度的权利，能够设置各种精细的�
 我们可以在这个基础上提升 TiFlash 在 HTAP 场景下的易用性:
 - 资源组隔离
     - 让轻量级查询有充足的 cpu 快速执行
-	- 偏重量型查询在不影响轻量级查询的基础上平稳执行
-	- 并非硬性隔离，资源组可以弹性利用所有 cpu 资源.
+	- 偏重量型查询在不影响轻量级查询的前提下平稳执行
+	- 并非硬性隔离，资源组可以弹性利用所有 cpu 资源
 - 多租户
 	- 不同租户共用同一个大集群，基于租户权重共享 cpu
 	- 每个租户都可以弹性利用集群所有 cpu，在其他租户查询过来时，能及时让出对应的 cpu 份额
