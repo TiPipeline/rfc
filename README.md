@@ -97,7 +97,7 @@ TiFlash 原先的实现用 packet queue 来做网络层和计算层的交互。�
 - source 用于读算子，比如 async exchange receiver，async table scan，语义保证无阻塞  
 - sink 用于写算子，比如 async exchange sender，语义保证无阻塞  
 - 其余的算子都归类到 transform 里，语义保证无阻塞  
-# 场景
+# 场景展望
 pipeline model 让我们拥有了调度的权利，能够设置各种精细的调度策略。
 我们可以在这个基础上提升 TiFlash 在 HTAP 场景下的易用性:
 - 资源组隔离
