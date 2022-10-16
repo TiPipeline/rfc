@@ -2,7 +2,7 @@
 爱吃苦瓜和大米
 - [SeaRise](https://github.com/SeaRise): TiFlash 研发工程师
 # 项目介绍
-TiPipeline  
+**TiPipeline**  
 Better TiFlash execution model！  
 抛弃 TiFlash 计算层原有的简单粗暴线程模型，基于 Hyper morsel driven 的设计，完成新的 TiFlash 计算层执行模型 pipeline model，让 TiFlash 在高并发场景下有很好的执行效率和 query 公平调度。
 - 基于 pipeline breaker 的理论，将执行流拆分为计算密集型的若干 pipeline，最大化利用 cpu。
