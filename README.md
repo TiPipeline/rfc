@@ -9,7 +9,7 @@ Better TiFlash execution model！
 - 使用 thread per core 的线程模型，消除 context switch 的开销，以及在此基础上做 query 的公平调度执行。  
 
 最终实现一个公平调度、高性能且在多核机器上具备线性扩展性的执行模型。    
-https://github.com/TiPipeline/tiflash/tree/pipeline_model    
+https://github.com/orgs/TiPipeline/repositories
 # 背景 & 动机
 目前 TiFlash 计算层的执行模型对线程的使用是无节制的，一个 query 会申请且占据若干条线程执行，直到 query 结束为止才释放线程。这种线程模型在高并发场景下的表现并不优。  
 ![stream_model](./media/stream_model.png)  
