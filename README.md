@@ -1,6 +1,8 @@
 # 团队介绍
 爱吃苦瓜和大米
 - [SeaRise](https://github.com/SeaRise): TiFlash 研发工程师
+# PPT
+- https://docs.google.com/presentation/d/1wCZKHF4koheI_QtG4XTYTfK57VrI4kshv2_sNfiaXhI/edit?usp=sharing
 # 项目介绍
 **TiPipeline**  
 Better TiFlash execution model！  
